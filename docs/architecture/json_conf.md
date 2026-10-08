@@ -49,7 +49,10 @@ A field annotation is not enforced on writes (see [gaps](base_data_class.md#gaps
 Normalize in `__setitem__` rather than at every read. `update()` routes every key through it, so one place covers loading the file, saving from the UI, and hand edits:
 
 ```python
-_INT_SETTINGS = frozenset({"base_width", "window_shadow"})
+_INT_SETTINGS: dict[str, tuple[int, int]] = {  # key -> (lower, upper)
+    "base_width": (540, 2000),
+    "window_shadow": (0, 25),
+}
 
 
 class Settings(JsonConf):
@@ -57,12 +60,14 @@ class Settings(JsonConf):
     window_shadow: int = 5
 
     def __setitem__(self, key: str, value: Any) -> None:
-        if key in _INT_SETTINGS and not isinstance(value, int):
-            value = _as_int(key, value)  # falls back to the declared default for junk
+        if key in _INT_SETTINGS:
+            value = _as_bounded_int(key, value)
         super().__setitem__(key, value)
 ```
 
-Fall back to the declared default when the value cannot be read as the right type at all, so a single bad line in the file degrades that one setting instead of breaking whatever reads it.
+Normalize unconditionally rather than only when the type looks wrong: an `int` that is already an `int` can still be out of range, and a range is as much a part of the contract as the type. The same goes for a field typed as a `Literal`, where an unknown value usually means every consumer silently falls through its branches.
+
+Clamp what can be clamped and fall back to the declared default for what cannot, so a single bad line in the file degrades that one setting instead of breaking whatever reads it. Watch the exception type while converting: `json.loads` accepts `Infinity` and `1e400`, and `int()` rejects the resulting float with `OverflowError`, not `ValueError`.
 
 ## Why Instance Deduplication Matters
 

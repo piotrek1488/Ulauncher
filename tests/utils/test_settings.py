@@ -1,3 +1,7 @@
+import json
+
+import pytest
+
 from ulauncher.utils.settings import Settings
 
 
@@ -36,6 +40,27 @@ class TestSettings:
         settings.update({"recent_apps_grid_columns": "lots", "recent_apps_grid_icon_size": None})
         assert settings.recent_apps_grid_columns == 4
         assert settings.recent_apps_grid_icon_size == 48
+
+    @pytest.mark.parametrize("literal", ["Infinity", "-Infinity", "1e400", "NaN"])
+    def test_infinite_numeric_value_falls_back_instead_of_raising(self, literal: str) -> None:
+        """json.loads accepts these; int() rejects an inf with OverflowError, not ValueError."""
+        value = json.loads(f'{{"recent_apps_grid_columns": {literal}}}')["recent_apps_grid_columns"]
+        settings = Settings()
+        settings.update({"recent_apps_grid_columns": value})
+        assert settings.recent_apps_grid_columns == 4
+
+    def test_enum_settings_reject_unknown_values(self) -> None:
+        """An unknown label mode would render tiles with no labels while the combo shows default."""
+        settings = Settings()
+        settings.update({"recent_apps_layout": "mosaic", "recent_apps_grid_labels": "bogus"})
+        assert settings.recent_apps_layout == "list"
+        assert settings.recent_apps_grid_labels == "name-and-shortcut"
+
+    def test_enum_settings_keep_known_values(self) -> None:
+        settings = Settings()
+        settings.update({"recent_apps_layout": "grid", "recent_apps_grid_labels": "none"})
+        assert settings.recent_apps_layout == "grid"
+        assert settings.recent_apps_grid_labels == "none"
 
     def test_numeric_settings_are_clamped_to_their_bounds(self) -> None:
         """A hand-edited column count must not reach the grid: it pads per unused column."""

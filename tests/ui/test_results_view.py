@@ -11,7 +11,7 @@ from pytest_mock import MockerFixture
 from ulauncher.internals.query import Query
 from ulauncher.internals.result import Result
 from ulauncher.internals.results_update import ResultsUpdate, results_update
-from ulauncher.ui.results_view import ResultsView
+from ulauncher.ui.results_view import TILE_EXTRA_WIDTH, ResultsView
 from ulauncher.ui.ulauncher_window import UlauncherWindow
 
 
@@ -205,21 +205,34 @@ class TestGridKeyboardTakeover:
     @pytest.mark.parametrize("keyname", ["Left", "Right", "Tab", "ISO_Left_Tab"])
     def test_grid_takes_the_key_while_the_input_is_empty(self, keyname: str) -> None:
         window = self._window(4)
-        assert UlauncherWindow._handle_grid_navigation(window, keyname, "") is True
+        assert UlauncherWindow._handle_grid_navigation(window, keyname, "", has_modifier=False) is True
 
     @pytest.mark.parametrize("keyname", ["Left", "Right", "Tab", "ISO_Left_Tab"])
     def test_typed_text_keeps_the_key(self, keyname: str) -> None:
         """An extension can leave the grid on screen after the user started typing."""
         window = self._window(4)
-        assert UlauncherWindow._handle_grid_navigation(window, keyname, "fi") is False
+        assert UlauncherWindow._handle_grid_navigation(window, keyname, "fi", has_modifier=False) is False
         window.results_view.go_left.assert_not_called()
         window.results_view.go_right.assert_not_called()
 
+    @pytest.mark.parametrize("keyname", ["Left", "Right"])
+    def test_ctrl_and_alt_combinations_stay_with_the_entry(self, keyname: str) -> None:
+        window = self._window(4)
+        assert UlauncherWindow._handle_grid_navigation(window, keyname, "", has_modifier=True) is False
+        window.results_view.go_left.assert_not_called()
+        window.results_view.go_right.assert_not_called()
+
+    def test_shift_tab_still_belongs_to_the_grid(self) -> None:
+        """Shift is not a blocking modifier: Shift+Tab arrives as ISO_Left_Tab."""
+        window = self._window(4)
+        assert UlauncherWindow._handle_grid_navigation(window, "ISO_Left_Tab", "", has_modifier=False) is True
+        window.results_view.go_left.assert_called_once_with()
+
     def test_a_list_never_takes_the_key(self) -> None:
-        assert UlauncherWindow._handle_grid_navigation(self._window(1), "Left", "") is False
+        assert UlauncherWindow._handle_grid_navigation(self._window(1), "Left", "", has_modifier=False) is False
 
     def test_unrelated_keys_fall_through(self) -> None:
-        assert UlauncherWindow._handle_grid_navigation(self._window(4), "Up", "") is False
+        assert UlauncherWindow._handle_grid_navigation(self._window(4), "Up", "", has_modifier=False) is False
 
 
 class TestResultsViewGridRender:
@@ -231,13 +244,14 @@ class TestResultsViewGridRender:
         mocker.patch("ulauncher.ui.result_widget.ResultWidget.scroll_to_focus")
 
     @staticmethod
-    def _view(layout: str = "grid", columns: int = 4) -> ResultsView:
+    def _view(layout: str = "grid", columns: int = 4, icon_size: int = 48, base_width: int = 750) -> ResultsView:
         settings = MagicMock()
         settings.get_jump_keys.return_value = ["1", "2", "3", "4", "5", "6", "7", "8"]
         settings.recent_apps_layout = layout
         settings.recent_apps_grid_columns = columns
-        settings.recent_apps_grid_icon_size = 48
+        settings.recent_apps_grid_icon_size = icon_size
         settings.recent_apps_grid_labels = "name-and-shortcut"
+        settings.base_width = base_width
         return ResultsView(settings, lambda *_: None, lambda *_: None)
 
     @staticmethod
@@ -291,6 +305,35 @@ class TestResultsViewGridRender:
         view.render(append)
         assert view.columns == 1
         assert len(view._widgets) == 1
+
+    def test_single_column_grid_still_replaces_instead_of_appending(self) -> None:
+        """columns == 1 for a one-column grid, so the append guard cannot key off the count."""
+        view = self._view(columns=1)
+        view.render(self._update(3))
+        assert view.columns == 1
+        assert view._is_grid
+        append = results_update([Result(name="searched")], Query(None, "q"), None, True, False)
+        view.render(append)
+        assert not view._is_grid
+        assert len(view._widgets) == 1
+        assert not any(isinstance(child, Gtk.Grid) for child in view._box.get_children())
+
+    @pytest.mark.parametrize(
+        ("base_width", "icon_size", "columns", "expected"),
+        [
+            pytest.param(750, 48, 4, 4, id="default_fits"),
+            pytest.param(540, 128, 12, 3, id="drops_columns_that_cannot_fit"),
+            pytest.param(540, 128, 2, 2, id="never_adds_columns"),
+            pytest.param(540, 128, 12, 3, id="worst_case_stays_within_the_window"),
+        ],
+    )
+    def test_columns_are_capped_by_the_window_width(
+        self, base_width: int, icon_size: int, columns: int, expected: int
+    ) -> None:
+        view = self._view(columns=columns, icon_size=icon_size, base_width=base_width)
+        view.render(self._update(12))
+        assert view.columns == expected
+        assert view.columns * (icon_size + TILE_EXTRA_WIDTH) <= base_width
 
 
 class TestResultsViewSelection:

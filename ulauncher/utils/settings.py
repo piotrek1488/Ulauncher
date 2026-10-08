@@ -30,6 +30,15 @@ _INT_SETTINGS: dict[str, tuple[int, int]] = {
     "window_shadow": (0, 25),
 }
 
+# Same reasoning for the settings typed as a Literal. An unknown value reaches the widgets, which
+# match it against the values they know and quietly fall through: an unrecognized label mode would
+# render tiles with no labels at all, while the preferences combo shows the default, so the UI and
+# the window disagree about what is configured.
+_ENUM_SETTINGS: dict[str, tuple[str, ...]] = {
+    "recent_apps_grid_labels": ("none", "name", "shortcut", "name-and-shortcut"),
+    "recent_apps_layout": ("list", "grid"),
+}
+
 
 # TODO: Remove this some time after v6 stable (give people some month to migrate)
 @lru_cache(maxsize=None)  # cached so it only runs once per session
@@ -51,10 +60,21 @@ def _as_bounded_int(key: str, value: Any) -> int:
     lower, upper = _INT_SETTINGS[key]
     try:
         return min(upper, max(lower, int(value)))
-    except (TypeError, ValueError):
+    # json.loads reads Infinity and 1e400 as a float infinity, which int() rejects with
+    # OverflowError rather than ValueError. Letting that escape would break Settings.load().
+    except (OverflowError, TypeError, ValueError):
         default = getattr(Settings, key)
         logger.warning('Invalid value %r for setting "%s", using %s instead', value, key, default)
         return int(default)
+
+
+def _as_known_enum(key: str, value: Any) -> str:
+    """Keep an enum setting to the values the code handles, or fall back to its default."""
+    if value in _ENUM_SETTINGS[key]:
+        return value
+    default = getattr(Settings, key)
+    logger.warning('Invalid value %r for setting "%s", using "%s" instead', value, key, default)
+    return str(default)
 
 
 class Settings(JsonConf):
@@ -101,6 +121,8 @@ class Settings(JsonConf):
             normalized = "max_recent_apps"
         if normalized in _INT_SETTINGS:
             value = _as_bounded_int(normalized, value)
+        elif normalized in _ENUM_SETTINGS:
+            value = _as_known_enum(normalized, value)
         super().__setitem__(normalized, value)
 
     def get_jump_keys(self) -> list[str]:

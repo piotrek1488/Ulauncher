@@ -16,6 +16,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Horizontal padding and margins a grid tile adds around its icon, see grid_result_widget and the
+# .grid-item-container rule in RESULT_GRID_CSS. Used to work out how many tiles fit a row.
+TILE_EXTRA_WIDTH = 16
+
 
 class ResultsView(Gtk.ScrolledWindow):
     """Scrollable list of results, owning the result widgets and the selection within them."""
@@ -24,7 +28,8 @@ class ResultsView(Gtk.ScrolledWindow):
     _index = 0
     _user_selected = False  # True once the user actively moved the selection (keyboard/mouse)
     _query = ""
-    _columns = 1  # > 1 while the results are laid out as a grid
+    _columns = 1  # tiles per row; 1 for a list, and also for a single-column grid
+    _is_grid = False  # tracked separately: a 1-column grid still lives in a Gtk.Grid
 
     def __init__(
         self,
@@ -65,8 +70,8 @@ class ResultsView(Gtk.ScrolledWindow):
             self._query = str(update["query"])
             self._user_selected = False
 
-        # A grid is always rendered in one go, so an append would have to mix tiles into it.
-        if update["append"] and self._widgets and self._columns == 1:
+        # A grid is always rendered in one go, so an append would have to mix rows into it.
+        if update["append"] and self._widgets and not self._is_grid:
             self._append_results(update)
         else:
             self._replace_results(update)
@@ -125,6 +130,7 @@ class ResultsView(Gtk.ScrolledWindow):
         result_list = update["results"][: self._limit()]
         grid_columns = self._grid_columns(update)
         self._columns = grid_columns or 1
+        self._is_grid = bool(grid_columns)
         # stock sizing works for single-line results; only wrapped ones need _fit_results_height.
         # Grid tiles wrap their names, so they need it too.
         self._has_wrapped_results = bool(grid_columns) or any(result.wrap for result in result_list)
@@ -177,9 +183,15 @@ class ResultsView(Gtk.ScrolledWindow):
 
     def _grid_columns(self, update: ResultsUpdate) -> int:
         """Tiles per row for this update, or 0 to render the regular list."""
-        if not update.get("is_home") or self._settings.recent_apps_layout != "grid":
+        if not update["is_home"] or self._settings.recent_apps_layout != "grid":
             return 0
-        return max(1, self._settings.recent_apps_grid_columns)
+        # The column count and the icon size are capped individually, but their product is not:
+        # 12 columns of 128px icons need more than a 540px window can give, and horizontal
+        # scrolling is off, so the window would be forced wider than base_width. Drop columns
+        # until the row fits instead.
+        tile_width = self._settings.recent_apps_grid_icon_size + TILE_EXTRA_WIDTH
+        fits = self._settings.base_width // tile_width
+        return max(1, min(self._settings.recent_apps_grid_columns, fits))
 
     def _add_grid_widgets(self, results: list[Result], query: Query, columns: int) -> None:
         from ulauncher.ui.grid_result_widget import GridResultWidget
