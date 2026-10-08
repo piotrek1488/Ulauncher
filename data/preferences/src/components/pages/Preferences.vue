@@ -94,7 +94,10 @@
             :max="gridColumnsRange.max"
             style="width:250px"
             id="recent-apps-grid-columns"
-            v-model="recent_apps_grid_columns"
+            :value="gridColumnsDraft"
+            @input="gridColumnsDraft = $event"
+            @change="commitGridColumns"
+            @blur="commitGridColumns"
           ></b-form-input>
         </td>
       </tr>
@@ -124,7 +127,10 @@
             :max="gridIconSizeRange.max"
             style="width:250px"
             id="recent-apps-grid-icon-size"
-            v-model="recent_apps_grid_icon_size"
+            :value="gridIconSizeDraft"
+            @input="gridIconSizeDraft = $event"
+            @change="commitGridIconSize"
+            @blur="commitGridIconSize"
           ></b-form-input>
         </td>
       </tr>
@@ -238,8 +244,9 @@ import EditableTextList from '@/components/widgets/EditableTextList'
 
 const hotkeyEventName = 'hotkey-show-app'
 
-// Must mirror the limits in ulauncher/ui/GridItemWidget.py, which the preferences API
-// clamps to. Normalizing here keeps the inputs from displaying an unsaved value.
+// Must mirror the limits in ulauncher/utils/recent_apps.py, which the preferences API
+// clamps to. Clamping here as well keeps the inputs from displaying a value that was
+// never saved, but only on commit -- see the drafts in data().
 const GRID_COLUMNS = { min: 1, max: 12, default: 4 }
 const GRID_ICON_SIZE = { min: 16, max: 128, default: 48 }
 
@@ -249,6 +256,10 @@ function clampSetting(value, { min, max, default: fallback }) {
     return String(fallback)
   }
   return String(Math.min(max, Math.max(min, parsed)))
+}
+
+function draftFromPref(value, { default: fallback }) {
+  return value === undefined || value === null || value === '' ? String(fallback) : String(value)
 }
 
 export default {
@@ -285,7 +296,28 @@ export default {
         'name-and-shortcut': 'Icon + name + shortcut'
       },
       gridColumnsRange: GRID_COLUMNS,
-      gridIconSizeRange: GRID_ICON_SIZE
+      gridIconSizeRange: GRID_ICON_SIZE,
+      // Drafts for the numeric grid inputs. They hold whatever is typed, unclamped, and
+      // are only normalized and saved on commit (change/blur), so that a half-typed
+      // "6" on the way to "64" isn't rewritten to the minimum under the cursor.
+      gridColumnsDraft: String(GRID_COLUMNS.default),
+      gridIconSizeDraft: String(GRID_ICON_SIZE.default)
+    }
+  },
+
+  watch: {
+    'prefs.recent_apps_grid_columns': {
+      immediate: true,
+      handler(value) {
+        this.gridColumnsDraft = draftFromPref(value, GRID_COLUMNS)
+      }
+    },
+
+    'prefs.recent_apps_grid_icon_size': {
+      immediate: true,
+      handler(value) {
+        this.gridIconSizeDraft = draftFromPref(value, GRID_ICON_SIZE)
+      }
     }
   },
 
@@ -339,18 +371,6 @@ export default {
       }
     },
 
-    recent_apps_grid_columns: {
-      get() {
-        return this.prefs.recent_apps_grid_columns || String(GRID_COLUMNS.default)
-      },
-      set(value) {
-        // clamp here too, so the field never shows something other than what was saved
-        const normalized = clampSetting(value, GRID_COLUMNS)
-        this.setPrefs({ recent_apps_grid_columns: normalized })
-        jsonp('prefs://set/recent-apps-grid-columns', { value: normalized }).catch(err => bus.$emit('error', err))
-      }
-    },
-
     recent_apps_grid_labels: {
       get() {
         return this.prefs.recent_apps_grid_labels || 'name-and-shortcut'
@@ -358,17 +378,6 @@ export default {
       set(value) {
         this.setPrefs({ recent_apps_grid_labels: value })
         jsonp('prefs://set/recent-apps-grid-labels', { value: value }).catch(err => bus.$emit('error', err))
-      }
-    },
-
-    recent_apps_grid_icon_size: {
-      get() {
-        return this.prefs.recent_apps_grid_icon_size || String(GRID_ICON_SIZE.default)
-      },
-      set(value) {
-        const normalized = clampSetting(value, GRID_ICON_SIZE)
-        this.setPrefs({ recent_apps_grid_icon_size: normalized })
-        jsonp('prefs://set/recent-apps-grid-icon-size', { value: normalized }).catch(err => bus.$emit('error', err))
       }
     },
 
@@ -447,6 +456,33 @@ export default {
 
   methods: {
     ...mapMutations(['setPrefs']),
+
+    commitGridColumns() {
+      this.gridColumnsDraft = this.commitGridSetting(
+        this.gridColumnsDraft,
+        GRID_COLUMNS,
+        'recent_apps_grid_columns',
+        'prefs://set/recent-apps-grid-columns'
+      )
+    },
+
+    commitGridIconSize() {
+      this.gridIconSizeDraft = this.commitGridSetting(
+        this.gridIconSizeDraft,
+        GRID_ICON_SIZE,
+        'recent_apps_grid_icon_size',
+        'prefs://set/recent-apps-grid-icon-size'
+      )
+    },
+
+    commitGridSetting(draft, range, prefName, url) {
+      const normalized = clampSetting(draft, range)
+      if (normalized !== draftFromPref(this.prefs[prefName], range)) {
+        this.setPrefs({ [prefName]: normalized })
+        jsonp(url, { value: normalized }).catch(err => bus.$emit('error', err))
+      }
+      return normalized
+    },
 
     openUrlInBrowser(url) {
       jsonp('prefs://open/web-url', { url: url })
