@@ -324,7 +324,10 @@ class TestResultsViewGridRender:
             pytest.param(750, 48, 4, 4, id="default_fits"),
             pytest.param(540, 128, 12, 3, id="drops_columns_that_cannot_fit"),
             pytest.param(540, 128, 2, 2, id="never_adds_columns"),
-            pytest.param(540, 128, 12, 3, id="worst_case_stays_within_the_window"),
+            # 4 tiles of 120px need 512 of the 540 available, so none may be dropped
+            pytest.param(540, 120, 4, 4, id="keeps_columns_that_only_just_fit"),
+            pytest.param(540, 48, 9, 9, id="exact_fit_is_kept"),
+            pytest.param(540, 48, 10, 9, id="one_column_over_is_dropped"),
         ],
     )
     def test_columns_are_capped_by_the_window_width(

@@ -16,9 +16,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Horizontal padding and margins a grid tile adds around its icon, see grid_result_widget and the
-# .grid-item-container rule in RESULT_GRID_CSS. Used to work out how many tiles fit a row.
-TILE_EXTRA_WIDTH = 16
+# What a tile adds around its icon horizontally: the 4px left and right of the `padding: 8px 4px`
+# on .grid-item-container in RESULT_GRID_CSS. Only used to estimate how many tiles fit a row, so a
+# theme overriding that padding just makes the estimate less exact, never the layout wrong.
+TILE_EXTRA_WIDTH = 8
 
 
 class ResultsView(Gtk.ScrolledWindow):
