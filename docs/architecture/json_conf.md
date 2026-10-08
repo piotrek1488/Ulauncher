@@ -42,6 +42,28 @@ config.save()
 
 Every field needs a default, so required fields are off-limits: file data is partial, so a missing key falls back to a default, and `clear()` restores them. This reverses the in-memory `BaseDataClass` rule. Prefer a falsy default over `None`, since the data is untrusted (see [choosing a field's default](base_data_class.md#choosing-a-fields-default)).
 
+## Normalizing untrusted values
+
+A field annotation is not enforced on writes (see [gaps](base_data_class.md#gaps)), and the file behind a `JsonConf` is hand-editable. So a field annotated `int` can hold `"4"` at runtime, and nothing reports it: not the type checker, not the loader. Consumers then fail far from the cause - a string where a number is expected makes `Gtk.Adjustment` raise, and arithmetic like `max(1, value)` raises too.
+
+Normalize in `__setitem__` rather than at every read. `update()` routes every key through it, so one place covers loading the file, saving from the UI, and hand edits:
+
+```python
+_INT_SETTINGS = frozenset({"base_width", "window_shadow"})
+
+
+class Settings(JsonConf):
+    base_width: int = 750
+    window_shadow: int = 5
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        if key in _INT_SETTINGS and not isinstance(value, int):
+            value = _as_int(key, value)  # falls back to the declared default for junk
+        super().__setitem__(key, value)
+```
+
+Fall back to the declared default when the value cannot be read as the right type at all, so a single bad line in the file degrades that one setting instead of breaking whatever reads it.
+
 ## Why Instance Deduplication Matters
 
 Without deduplication:
