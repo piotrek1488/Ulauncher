@@ -5,6 +5,7 @@ from typing import Any, cast
 from unittest.mock import MagicMock
 
 import pytest
+from gi.repository import Gtk
 from pytest_mock import MockerFixture
 
 from ulauncher.internals.query import Query
@@ -122,6 +123,143 @@ class TestResultsViewNavigation:
         view.go_down()
         assert view.get_active_result() is None
         assert not view.has_results
+
+
+class TestResultsViewGridNavigation:
+    """6 tiles in 4 columns, i.e. 0 1 2 3 / 4 5"""
+
+    @pytest.fixture
+    def items(self) -> list[MagicMock]:
+        return [MagicMock() for _ in range(6)]
+
+    @pytest.fixture
+    def view(self, items: list[MagicMock]) -> ResultsView:
+        view = ResultsView(cast("Any", MagicMock()), cast("Any", MagicMock()), cast("Any", MagicMock()))
+        view._widgets = cast("Any", items)
+        view._columns = 4
+        return view
+
+    def test_columns_defaults_to_one(self) -> None:
+        view = ResultsView(cast("Any", MagicMock()), cast("Any", MagicMock()), cast("Any", MagicMock()))
+        assert view.columns == 1
+
+    def test_go_right(self, view: ResultsView) -> None:
+        view.go_right()
+        assert view._index == 1
+
+    def test_go_right_from_last_wraps_to_first(self, view: ResultsView) -> None:
+        view.select(5)
+        view.go_right()
+        assert view._index == 0
+
+    def test_go_left_from_first_wraps_to_last(self, view: ResultsView) -> None:
+        view.go_left()
+        assert view._index == 5
+
+    def test_go_down_jumps_a_row(self, view: ResultsView) -> None:
+        view.select(1)
+        view.go_down()
+        assert view._index == 5
+
+    def test_go_down_wraps_within_the_column(self, view: ResultsView) -> None:
+        view.select(5)
+        view.go_down()
+        assert view._index == 1
+
+    def test_go_down_stays_put_when_the_column_has_a_single_row(self, view: ResultsView) -> None:
+        view.select(3)
+        view.go_down()
+        assert view._index == 3
+
+    def test_go_up_jumps_a_row(self, view: ResultsView) -> None:
+        view.select(4)
+        view.go_up()
+        assert view._index == 0
+
+    def test_go_up_wraps_to_the_last_populated_row_of_the_column(self, view: ResultsView) -> None:
+        view.select(1)
+        view.go_up()
+        assert view._index == 5
+
+    def test_navigation_on_empty_is_noop(self) -> None:
+        view = ResultsView(cast("Any", MagicMock()), cast("Any", MagicMock()), cast("Any", MagicMock()))
+        view._columns = 4
+        view.go_up()
+        view.go_down()
+        view.go_left()
+        view.go_right()
+        assert view.get_active_result() is None
+
+
+class TestResultsViewGridRender:
+    """Rendering the frequent apps as a grid (builds real tile widgets)."""
+
+    @pytest.fixture(autouse=True)
+    def _no_scroll(self, mocker: MockerFixture) -> None:
+        mocker.patch("ulauncher.ui.grid_result_widget.GridResultWidget.scroll_to_focus")
+        mocker.patch("ulauncher.ui.result_widget.ResultWidget.scroll_to_focus")
+
+    @staticmethod
+    def _view(layout: str = "grid", columns: int = 4) -> ResultsView:
+        settings = MagicMock()
+        settings.get_jump_keys.return_value = ["1", "2", "3", "4", "5", "6", "7", "8"]
+        settings.recent_apps_layout = layout
+        settings.recent_apps_grid_columns = columns
+        settings.recent_apps_grid_icon_size = 48
+        settings.recent_apps_grid_labels = "name-and-shortcut"
+        return ResultsView(settings, lambda *_: None, lambda *_: None)
+
+    @staticmethod
+    def _update(count: int, is_home: bool = True) -> ResultsUpdate:
+        results = [Result(name=f"app{i}") for i in range(count)]
+        return results_update(results, Query(None, ""), None, False, is_home)
+
+    def test_home_results_render_as_a_grid(self) -> None:
+        view = self._view()
+        view.render(self._update(6))
+        assert view.columns == 4
+        assert len(view._widgets) == 6
+        grid = view._box.get_children()[0]
+        assert isinstance(grid, Gtk.Grid)
+
+    def test_partial_last_row_is_padded_to_keep_column_widths(self) -> None:
+        view = self._view()
+        view.render(self._update(6))
+        grid = cast("Any", view._box.get_children()[0])
+        assert len(grid.get_children()) == 6 + 2  # 2 filler cells
+
+    def test_full_last_row_is_not_padded(self) -> None:
+        view = self._view()
+        view.render(self._update(8))
+        grid = cast("Any", view._box.get_children()[0])
+        assert len(grid.get_children()) == 8
+
+    def test_search_results_stay_a_list(self) -> None:
+        view = self._view()
+        view.render(self._update(6, is_home=False))
+        assert view.columns == 1
+        assert not any(isinstance(child, Gtk.Grid) for child in view._box.get_children())
+
+    def test_list_layout_setting_keeps_home_results_a_list(self) -> None:
+        view = self._view(layout="list")
+        view.render(self._update(6))
+        assert view.columns == 1
+        assert not any(isinstance(child, Gtk.Grid) for child in view._box.get_children())
+
+    def test_zero_columns_setting_falls_back_to_one(self) -> None:
+        view = self._view(columns=0)
+        view.render(self._update(3))
+        assert view.columns == 1
+
+    def test_switching_from_grid_to_list_replaces_instead_of_appending(self) -> None:
+        view = self._view()
+        view.render(self._update(4))
+        assert view.columns == 4
+        # an append for a different (searching) query must not drop list rows into the grid
+        append = results_update([Result(name="searched")], Query(None, "q"), None, True, False)
+        view.render(append)
+        assert view.columns == 1
+        assert len(view._widgets) == 1
 
 
 class TestResultsViewSelection:

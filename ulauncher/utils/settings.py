@@ -10,6 +10,8 @@ from ulauncher.utils.lru_cache import lru_cache
 
 _settings_file = f"{paths.CONFIG}/settings.json"
 DisplayBackend = Literal["auto", "system", "x11"]
+RecentAppsLayout = Literal["list", "grid"]
+RecentAppsGridLabels = Literal["none", "name", "shortcut", "name-and-shortcut"]
 
 
 # TODO: Remove this some time after v6 stable (give people some month to migrate)
@@ -42,6 +44,10 @@ class Settings(JsonConf):
     layer_shell: bool = True
     max_recent_apps: int = 0
     raise_if_started: bool = False
+    recent_apps_grid_columns: int = 4
+    recent_apps_grid_icon_size: int = 48
+    recent_apps_grid_labels: RecentAppsGridLabels = "name-and-shortcut"
+    recent_apps_layout: RecentAppsLayout = "list"
     render_on_screen: str = "mouse-pointer-monitor"
     show_tray_icon: bool = True
     terminal_command: str = ""

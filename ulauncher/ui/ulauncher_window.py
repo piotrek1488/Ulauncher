@@ -293,6 +293,9 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             return True
 
         if self.results_view.has_results:
+            if self._handle_grid_navigation(keyname):
+                return True
+
             if keyname in ("Up", "ISO_Left_Tab") or (ctrl and keyname == up_alias):
                 self.results_view.go_up()
                 return True
@@ -315,6 +318,22 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             if alt and event.string in jump_keys:
                 self.results_view.select(jump_keys.index(event.string))
                 return True
+        return False
+
+    def _handle_grid_navigation(self, keyname: str | None) -> bool:
+        """In a grid, left/right walk tile by tile while up/down jump a whole row.
+
+        Plain Left/Right would otherwise move the text cursor, which is harmless to take over
+        because the grid only shows while the input is empty.
+        """
+        if self.results_view.columns < 2:  # noqa: PLR2004
+            return False
+        if keyname in ("Left", "ISO_Left_Tab"):
+            self.results_view.go_left()
+            return True
+        if keyname in ("Right", "Tab"):
+            self.results_view.go_right()
+            return True
         return False
 
     def on_mouse_down(self, _event_box: Gtk.EventBox, event: Gdk.EventButton) -> None:
