@@ -200,22 +200,7 @@ class UlauncherWindow(Gtk.Window, WindowHelper):
             self.activate_preferences()
 
         if self.results_nav:
-            # The grid is only ever rendered for an empty query, but it stays on screen
-            # while an extension is still working on a non-empty one. Requiring an empty
-            # input keeps Left/Right as text cursor keys in that window.
-            is_grid = self.results_nav.columns > 1 and not self.input.get_text()
-            if is_grid and keyname == 'ISO_Left_Tab':
-                # in a grid Tab/Shift+Tab walk item by item, arrows walk rows/columns
-                self.results_nav.go_left()
-                return True
-            if is_grid and keyname == 'Tab':
-                self.results_nav.go_right()
-                return True
-            if is_grid and keyname == 'Left':
-                self.results_nav.go_left()
-                return True
-            if is_grid and keyname == 'Right':
-                self.results_nav.go_right()
+            if self._handle_grid_navigation(keyname):
                 return True
             if keyname in ('Up', 'ISO_Left_Tab') or (ctrl and keyname == 'p'):
                 self.results_nav.go_up()
@@ -241,6 +226,24 @@ class UlauncherWindow(Gtk.Window, WindowHelper):
                 except IndexError:
                     # selected non-existing result item
                     pass
+
+    def _handle_grid_navigation(self, keyname):
+        """
+        In a grid, Left/Right and Tab/Shift+Tab walk item by item, while Up/Down jump a row.
+
+        The grid is only ever rendered for an empty query, but it stays on screen while an
+        extension is still working on a non-empty one. Requiring an empty input keeps
+        Left/Right as text cursor keys in that window.
+        """
+        if self.results_nav.columns < 2 or self.input.get_text():
+            return False
+        if keyname in ('Left', 'ISO_Left_Tab'):
+            self.results_nav.go_left()
+            return True
+        if keyname in ('Right', 'Tab'):
+            self.results_nav.go_right()
+            return True
+        return False
 
     ######################################
     # Helpers

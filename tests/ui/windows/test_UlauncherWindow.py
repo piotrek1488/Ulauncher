@@ -134,3 +134,42 @@ class TestUlauncherWindow:
         assert UlauncherWindow()
 
         extRunner.run_all.assert_not_called()
+
+
+class TestGridKeyboardTakeover:
+    """Horizontal keys only belong to the grid while the input is empty."""
+
+    @staticmethod
+    def _window(columns, text=''):
+        # a fake self is enough: the handler only reads results_nav and input, then calls back
+        return mock.Mock(
+            results_nav=mock.Mock(columns=columns),
+            input=mock.Mock(**{'get_text.return_value': text}),
+        )
+
+    @pytest.mark.parametrize('keyname,expected_call', [
+        ('Left', 'go_left'),
+        ('ISO_Left_Tab', 'go_left'),
+        ('Right', 'go_right'),
+        ('Tab', 'go_right'),
+    ])
+    def test_grid_takes_the_key_while_the_input_is_empty(self, keyname, expected_call):
+        window = self._window(4)
+        assert UlauncherWindow._handle_grid_navigation(window, keyname) is True
+        getattr(window.results_nav, expected_call).assert_called_once_with()
+
+    @pytest.mark.parametrize('keyname', ['Left', 'Right', 'Tab', 'ISO_Left_Tab'])
+    def test_typed_text_keeps_the_key(self, keyname):
+        """An extension can leave the grid on screen after the user started typing."""
+        window = self._window(4, text='fi')
+        assert UlauncherWindow._handle_grid_navigation(window, keyname) is False
+        window.results_nav.go_left.assert_not_called()
+        window.results_nav.go_right.assert_not_called()
+
+    def test_a_list_never_takes_the_key(self):
+        window = self._window(1)
+        assert UlauncherWindow._handle_grid_navigation(window, 'Left') is False
+        window.results_nav.go_left.assert_not_called()
+
+    def test_unrelated_keys_fall_through(self):
+        assert UlauncherWindow._handle_grid_navigation(self._window(4), 'Up') is False

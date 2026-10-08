@@ -10,10 +10,9 @@ from gi.repository import Gdk
 from ulauncher.ui.ResultItemWidget import ResultItemWidget
 from ulauncher.utils.display import get_monitor_scale_factor
 from ulauncher.search.Query import Query
-# re-exported, so that callers that already deal with the widget don't need both modules
-from ulauncher.utils.recent_apps import (  # noqa: F401
-    LABELS_NONE, LABELS_NAME, LABELS_SHORTCUT, LABELS_NAME_AND_SHORTCUT, LABEL_MODES,
-    DEFAULT_LABEL_MODE, DEFAULT_ICON_SIZE, MIN_ICON_SIZE, MAX_ICON_SIZE, clamp_icon_size)
+from ulauncher.utils.recent_apps import (
+    LABELS_NAME, LABELS_SHORTCUT, LABELS_NAME_AND_SHORTCUT, LABEL_MODES,
+    DEFAULT_LABEL_MODE, DEFAULT_ICON_SIZE, clamp_icon_size)
 
 logger = logging.getLogger(__name__)
 
