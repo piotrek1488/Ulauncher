@@ -293,7 +293,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             return True
 
         if self.results_view.has_results:
-            if self._handle_grid_navigation(keyname):
+            if self._handle_grid_navigation(keyname, entry_widget.get_text()):
                 return True
 
             if keyname in ("Up", "ISO_Left_Tab") or (ctrl and keyname == up_alias):
@@ -320,13 +320,15 @@ class UlauncherWindow(Gtk.ApplicationWindow):
                 return True
         return False
 
-    def _handle_grid_navigation(self, keyname: str | None) -> bool:
+    def _handle_grid_navigation(self, keyname: str | None, input_text: str) -> bool:
         """In a grid, left/right walk tile by tile while up/down jump a whole row.
 
-        Plain Left/Right would otherwise move the text cursor, which is harmless to take over
-        because the grid only shows while the input is empty.
+        Taking over plain Left/Right is only safe while the input is empty. The grid is rendered
+        for an empty query, but it stays on screen until the next update replaces it, so an
+        extension still working on a freshly typed query leaves it visible - and by then those
+        keys belong to the text cursor again.
         """
-        if self.results_view.columns < 2:  # noqa: PLR2004
+        if input_text or self.results_view.columns < 2:  # noqa: PLR2004
             return False
         if keyname in ("Left", "ISO_Left_Tab"):
             self.results_view.go_left()

@@ -12,6 +12,7 @@ from ulauncher.internals.query import Query
 from ulauncher.internals.result import Result
 from ulauncher.internals.results_update import ResultsUpdate, results_update
 from ulauncher.ui.results_view import ResultsView
+from ulauncher.ui.ulauncher_window import UlauncherWindow
 
 
 def _named_widget(name: str, *, searchable: bool = True) -> MagicMock:
@@ -189,6 +190,36 @@ class TestResultsViewGridNavigation:
         view.go_left()
         view.go_right()
         assert view.get_active_result() is None
+
+
+class TestGridKeyboardTakeover:
+    """Horizontal arrows only belong to the grid while the input is empty."""
+
+    @staticmethod
+    def _window(columns: int) -> Any:
+        # a fake self is enough: the handler only reads results_view and calls back into it
+        view = MagicMock()
+        view.columns = columns
+        return cast("Any", SimpleNamespace(results_view=view))
+
+    @pytest.mark.parametrize("keyname", ["Left", "Right", "Tab", "ISO_Left_Tab"])
+    def test_grid_takes_the_key_while_the_input_is_empty(self, keyname: str) -> None:
+        window = self._window(4)
+        assert UlauncherWindow._handle_grid_navigation(window, keyname, "") is True
+
+    @pytest.mark.parametrize("keyname", ["Left", "Right", "Tab", "ISO_Left_Tab"])
+    def test_typed_text_keeps_the_key(self, keyname: str) -> None:
+        """An extension can leave the grid on screen after the user started typing."""
+        window = self._window(4)
+        assert UlauncherWindow._handle_grid_navigation(window, keyname, "fi") is False
+        window.results_view.go_left.assert_not_called()
+        window.results_view.go_right.assert_not_called()
+
+    def test_a_list_never_takes_the_key(self) -> None:
+        assert UlauncherWindow._handle_grid_navigation(self._window(1), "Left", "") is False
+
+    def test_unrelated_keys_fall_through(self) -> None:
+        assert UlauncherWindow._handle_grid_navigation(self._window(4), "Up", "") is False
 
 
 class TestResultsViewGridRender:

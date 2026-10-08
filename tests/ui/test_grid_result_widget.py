@@ -105,3 +105,21 @@ class TestGridResultWidget:
         widget = GridResultWidget(Result(name="a"), 2, Query("", None), noop, on_activate, JUMP_KEYS)
         widget.on_click(widget)
         on_activate.assert_called_once_with(2, False)
+
+    @pytest.mark.parametrize("scale_factor", [1, 2])
+    def test_icon_surface_is_requested_for_the_monitor_scale(self, mocker: MockerFixture, scale_factor: int) -> None:
+        """The size request stays logical px; only the surface is loaded at the scaled size."""
+        import cairo
+
+        # Gtk.Image.set_from_surface rejects a mock, so hand it a real (empty) surface
+        load_icon_surface = mocker.patch(
+            "ulauncher.ui.grid_result_widget.load_icon_surface",
+            return_value=cairo.ImageSurface(cairo.FORMAT_ARGB32, 1, 1),
+        )
+        mocker.patch("ulauncher.ui.grid_result_widget.GridResultWidget.get_scale_factor", return_value=scale_factor)
+
+        widget = _widget(result=Result(name="a", icon="firefox"), icon_size=48)
+
+        load_icon_surface.assert_called_once_with("firefox", 48, scale_factor)
+        icon = cast("Any", widget.item_box.get_children()[0]).get_children()[0]
+        assert icon.get_size_request() == (48, 48)

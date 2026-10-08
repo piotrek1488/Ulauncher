@@ -16,17 +16,19 @@ RecentAppsLayout = Literal["list", "grid"]
 RecentAppsGridLabels = Literal["none", "name", "shortcut", "name-and-shortcut"]
 
 # settings.json is meant to be hand-editable, so a numeric setting can arrive as a string like
-# "4". Gtk.Adjustment rejects those outright and the layout arithmetic raises on them, so they
-# are normalized on write instead of at every read.
-_INT_SETTINGS = frozenset(
-    {
-        "base_width",
-        "max_recent_apps",
-        "recent_apps_grid_columns",
-        "recent_apps_grid_icon_size",
-        "window_shadow",
-    }
-)
+# "4", or outside the range its spin button allows. Gtk.Adjustment rejects a string outright and
+# the layout arithmetic raises on it. Out of range is worse than cosmetic: the grid pads its last
+# row with one filler widget per unused column, so "100000" columns would hang the window, and an
+# unbounded icon size is loaded at that size. Normalizing on write covers loading the file,
+# saving from the UI and hand edits in one place.
+# Bounds mirror the spin buttons in ulauncher/ui/preferences/views/preferences.py.
+_INT_SETTINGS: dict[str, tuple[int, int]] = {
+    "base_width": (540, 2000),
+    "max_recent_apps": (0, 20),
+    "recent_apps_grid_columns": (1, 12),
+    "recent_apps_grid_icon_size": (16, 128),
+    "window_shadow": (0, 25),
+}
 
 
 # TODO: Remove this some time after v6 stable (give people some month to migrate)
@@ -44,10 +46,11 @@ def _drop_legacy_recent_apps(path: str) -> None:
             json_save(data, path, sort_keys=True)
 
 
-def _as_int(key: str, value: Any) -> int:
-    """Coerce a numeric setting to int, falling back to the declared default for junk values."""
+def _as_bounded_int(key: str, value: Any) -> int:
+    """Coerce a numeric setting to an int within its bounds, or fall back to its default."""
+    lower, upper = _INT_SETTINGS[key]
     try:
-        return int(value)
+        return min(upper, max(lower, int(value)))
     except (TypeError, ValueError):
         default = getattr(Settings, key)
         logger.warning('Invalid value %r for setting "%s", using %s instead', value, key, default)
@@ -96,8 +99,8 @@ class Settings(JsonConf):
             # If people haven't changed their settings since 2020 it'll be set to 0
             value = int(value) if str(value).isnumeric() else 0
             normalized = "max_recent_apps"
-        if normalized in _INT_SETTINGS and not isinstance(value, int):
-            value = _as_int(normalized, value)
+        if normalized in _INT_SETTINGS:
+            value = _as_bounded_int(normalized, value)
         super().__setitem__(normalized, value)
 
     def get_jump_keys(self) -> list[str]:
