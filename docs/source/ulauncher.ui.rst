@@ -19,6 +19,14 @@ ulauncher\.ui\.AppIndicator module
     :undoc-members:
     :show-inheritance:
 
+ulauncher\.ui\.GridItemWidget module
+------------------------------------
+
+.. automodule:: ulauncher.ui.GridItemWidget
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 ulauncher\.ui\.ItemNavigation module
 ------------------------------------
 

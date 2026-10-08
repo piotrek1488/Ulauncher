@@ -42,11 +42,19 @@ class AppIconCache:
         :param str desktop_file:
         :rtype: :class:`GtkPixbuf`
         """
+        return self.get_pixbuf_for_size(desktop_file, AppResultItem.get_icon_size())
+
+    def get_pixbuf_for_size(self, desktop_file: str, size: int):
+        """
+        :param str desktop_file:
+        :param int size: icon size in pixels (already multiplied by the monitor scale factor)
+        :rtype: :class:`GtkPixbuf`
+        """
         icon = self._icons.get(desktop_file)
         if not icon:
             return None
 
-        size = AppResultItem.get_icon_size()
+        size = int(size)
         try:
             return icon['sizes'][size]
         except KeyError:

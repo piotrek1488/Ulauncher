@@ -93,6 +93,26 @@
     font-size: 100%;
 }
 
+/**
+ * Frequent apps grid
+ * Colors are inherited from the .item-* classes, so themes extending this one
+ * keep working. Only the layout is overridden here, with an extra class in the
+ * selector so that re-declared .item-* rules in child themes don't win.
+ */
+.result-grid .grid-item-box {
+    border-radius: 4px;
+}
+.result-grid .selected.grid-item-box {
+    border-left: none;
+    border-right: none;
+}
+.result-grid .grid-item-name {
+    font-size: 95%;
+}
+.result-grid .grid-item-shortcut {
+    font-size: 80%;
+}
+
 .prefs-btn {
     border-radius: 12px;
     opacity: 0.8;

@@ -34,6 +34,35 @@ You might find these two wiki entries on GTK+ CSS useful:
 * https://developer.gnome.org/gtk3/stable/chap-css-properties.html
 
 
+Styling the frequent apps grid
+-----------------------------
+
+When the frequent apps are rendered as a grid of icons (``recent-apps-layout`` set to
+``grid``), each tile reuses the same style classes as a regular list item, so existing
+themes keep working without any change. Colors are picked up from ``.item-box``,
+``.item-name``, ``.item-text`` and ``.item-shortcut`` as usual.
+
+On top of that, the following classes are available if you want to style the grid
+specifically:
+
+* ``.result-grid`` - the container holding all the tiles
+* ``.grid-item-frame`` - outermost widget of a single tile
+* ``.grid-item-box`` - the box that gets the ``selected`` class
+* ``.grid-item-container`` - vertical box with the icon and the labels
+* ``.grid-item-icon`` - the app icon
+* ``.grid-item-name`` - the app name below the icon
+* ``.grid-item-shortcut`` - the ``Alt+<key>`` hint below the name
+
+Because child themes may re-declare the ``.item-*`` rules, grid rules in the built-in
+themes are written with ``.result-grid`` as an ancestor selector to keep them winning on
+specificity, for example::
+
+  .result-grid .selected.grid-item-box {
+      border-left: none;
+      border-right: none;
+  }
+
+
 manifest.json
 -------------
 

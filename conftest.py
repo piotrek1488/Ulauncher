@@ -18,6 +18,7 @@ def pytest_configure(config):
 def _scale_factor_one():
     with patch('ulauncher.utils.display.get_monitor_scale_factor', return_value=1), \
          patch('ulauncher.ui.ResultItemWidget.get_monitor_scale_factor', return_value=1), \
+         patch('ulauncher.ui.GridItemWidget.get_monitor_scale_factor', return_value=1), \
          patch('ulauncher.api.shared.item.ResultItem.get_monitor_scale_factor', return_value=1):
         yield
 

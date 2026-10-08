@@ -16,6 +16,7 @@ from gi.repository import Gtk, Gdk, GLib, Keybinder  # type: ignore
 # these imports are needed for Gtk to find widget classes
 from ulauncher.ui.ResultItemWidget import ResultItemWidget  # noqa: F401
 from ulauncher.ui.SmallResultItemWidget import SmallResultItemWidget   # noqa: F401
+from ulauncher.ui.GridItemWidget import GridItemWidget, DEFAULT_ICON_SIZE, DEFAULT_LABEL_MODE  # noqa: F401
 
 from ulauncher.config import get_data_file, get_options
 from ulauncher.ui.ItemNavigation import ItemNavigation
@@ -29,6 +30,7 @@ from ulauncher.utils.Settings import Settings
 from ulauncher.utils.decorator.singleton import singleton
 from ulauncher.utils.display import get_current_screen_geometry, get_primary_screen_geometry, get_monitor_scale_factor
 from ulauncher.utils.image_loader import load_image
+from ulauncher.utils.recent_apps import parse_recent_apps_value, LAYOUT_GRID, LAYOUT_LIST
 from ulauncher.utils.version_cmp import gtk_version_is_gte
 from ulauncher.utils.desktop.notification import show_notification
 from ulauncher.utils.wayland import is_wayland
@@ -197,6 +199,20 @@ class UlauncherWindow(Gtk.Window, WindowHelper):
             self.activate_preferences()
 
         if self.results_nav:
+            is_grid = self.results_nav.columns > 1
+            if is_grid and keyname == 'ISO_Left_Tab':
+                # in a grid Tab/Shift+Tab walk item by item, arrows walk rows/columns
+                self.results_nav.go_left()
+                return True
+            if is_grid and keyname == 'Tab':
+                self.results_nav.go_right()
+                return True
+            if is_grid and keyname == 'Left':
+                self.results_nav.go_left()
+                return True
+            if is_grid and keyname == 'Right':
+                self.results_nav.go_right()
+                return True
             if keyname in ('Up', 'ISO_Left_Tab') or (ctrl and keyname == 'p'):
                 self.results_nav.go_up()
                 return True
@@ -378,23 +394,28 @@ class UlauncherWindow(Gtk.Window, WindowHelper):
         self.results_nav = None
         self.result_box.foreach(lambda w: w.destroy())
 
-        show_recent_apps = self.settings.get_property('show-recent-apps')
-        recent_apps_number = 3 if show_recent_apps else 0
-        try:
-            recent_apps_number = int(str(show_recent_apps))
-        except ValueError:
-            pass
+        query = self._get_user_query()
+        as_grid = False
+
+        recent_apps_number, layout_override = parse_recent_apps_value(
+            self.settings.get_property('show-recent-apps'))
         if not result_items and not self.input.get_text() and recent_apps_number > 0:
             result_items = AppStatDb.get_instance().get_most_frequent(recent_apps_number)
+            layout = layout_override or self._get_setting_str('recent-apps-layout', LAYOUT_LIST)
+            as_grid = layout == LAYOUT_GRID
 
-        results = self.create_item_widgets(result_items, self._get_user_query())
+        if as_grid:
+            results, columns = self._create_grid(result_items, query)
+        else:
+            results = self.create_item_widgets(result_items, query)
+            columns = 1
+            for item in results:
+                self.result_box.add(item)
 
         if results:
             self._results_render_time = time.time()
-            for item in results:
-                self.result_box.add(item)
-            self.results_nav = ItemNavigation(self.result_box.get_children())
-            self.results_nav.select_default(self._get_user_query())
+            self.results_nav = ItemNavigation(results, columns)
+            self.results_nav.select_default(query)
 
             self.result_box.show_all()
             self.result_box.set_margin_bottom(10)
@@ -404,6 +425,53 @@ class UlauncherWindow(Gtk.Window, WindowHelper):
             self.result_box.set_margin_bottom(0)
             self.result_box.set_margin_top(0)
         logger.debug('render %s results', len(results))
+
+    def _get_setting_str(self, name, default=''):
+        value = self.settings.get_property(name)
+        return str(value) if value is not None else default
+
+    def _get_setting_int(self, name, default, minimum=1):
+        try:
+            return max(minimum, int(str(self.settings.get_property(name))))
+        except (TypeError, ValueError):
+            return default
+
+    def _create_grid(self, result_items, query):
+        """
+        Renders result items as a grid of tiles inside result_box.
+
+        :rtype: tuple(list, int)
+        :returns: the created widgets (in grid order) and the number of columns
+        """
+        columns = self._get_setting_int('recent-apps-grid-columns', 4)
+        icon_size = self._get_setting_int('recent-apps-grid-icon-size', DEFAULT_ICON_SIZE, minimum=16)
+        label_mode = self._get_setting_str('recent-apps-grid-labels', DEFAULT_LABEL_MODE)
+
+        def setup(widget):
+            widget.configure(icon_size=icon_size, label_mode=label_mode)
+
+        results = self.create_item_widgets(result_items, query, ui_file='grid_item', setup=setup)
+        if not results:
+            return [], columns
+
+        grid = Gtk.Grid()
+        grid.set_column_homogeneous(True)
+        # names may wrap to two lines, keep every row the same height anyway
+        grid.set_row_homogeneous(True)
+        grid.get_style_context().add_class('result-grid')
+
+        for index, item in enumerate(results):
+            grid.attach(item, index % columns, index // columns, 1, 1)
+
+        # fill the remainder of the last row so every column keeps the same width
+        remainder = len(results) % columns
+        if remainder:
+            last_row = (len(results) - 1) // columns
+            for column in range(remainder, columns):
+                grid.attach(Gtk.Box(), column, last_row, 1, 1)
+
+        self.result_box.add(grid)
+        return results, columns
 
     def _render_prefs_icon(self):
         scale_factor = get_monitor_scale_factor()
@@ -422,10 +490,16 @@ class UlauncherWindow(Gtk.Window, WindowHelper):
                 pass
 
     @staticmethod
-    def create_item_widgets(items, query):
+    def create_item_widgets(items, query, ui_file=None, setup=None):
+        """
+        :param list items: list of ResultItem instances
+        :param ~ulauncher.search.Query.Query query:
+        :param str ui_file: overrides the .ui file declared by the result item
+        :param callable setup: called with the freshly built widget, before it is initialized
+        """
         results = []
         for result_item in items:
-            glade_filename = get_data_file('ui', '%s.ui' % result_item.UI_FILE)
+            glade_filename = get_data_file('ui', '%s.ui' % (ui_file or result_item.UI_FILE))
             if not os.path.exists(glade_filename):
                 logger.warning("UI file not found: %s", glade_filename)
                 continue
@@ -435,6 +509,8 @@ class UlauncherWindow(Gtk.Window, WindowHelper):
             builder.add_from_file(glade_filename)
 
             item_frame = builder.get_object('item-frame')
+            if setup:
+                setup(item_frame)
             item_frame.initialize(builder, result_item, len(results), query)
 
             results.append(item_frame)

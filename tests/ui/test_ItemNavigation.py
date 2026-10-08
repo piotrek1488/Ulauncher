@@ -75,3 +75,78 @@ class TestItemNavigation:
         items[3].selected_by_default.return_value = False
         nav.select_default('q')
         select.assert_called_with(0)
+
+    def test_columns_default_to_one(self, nav):
+        assert nav.columns == 1
+
+
+class TestItemNavigationGrid:
+    """
+    6 items in 4 columns, i.e.
+        0 1 2 3
+        4 5
+    """
+
+    @pytest.fixture
+    def items(self):
+        return [mock.MagicMock() for _ in range(6)]
+
+    @pytest.fixture
+    def nav(self, items):
+        nav = ItemNavigation(items, columns=4)
+        nav.select(0)
+        return nav
+
+    def test_invalid_column_count_falls_back_to_one(self, items):
+        assert ItemNavigation(items, columns=0).columns == 1
+
+    def test_go_right(self, nav):
+        nav.go_right()
+        assert nav.get_selected_index() == 1
+
+    def test_go_right_wraps_to_first(self, nav):
+        nav.select(5)
+        nav.go_right()
+        assert nav.get_selected_index() == 0
+
+    def test_go_left_wraps_to_last(self, nav):
+        nav.go_left()
+        assert nav.get_selected_index() == 5
+
+    def test_go_down_jumps_a_row(self, nav):
+        nav.select(1)
+        nav.go_down()
+        assert nav.get_selected_index() == 5
+
+    def test_go_down_wraps_within_the_column(self, nav):
+        nav.select(5)
+        nav.go_down()
+        assert nav.get_selected_index() == 1
+
+    def test_go_down_stays_put_when_column_has_one_row(self, nav):
+        nav.select(3)
+        nav.go_down()
+        assert nav.get_selected_index() == 3
+
+    def test_go_up_jumps_a_row(self, nav):
+        nav.select(4)
+        nav.go_up()
+        assert nav.get_selected_index() == 0
+
+    def test_go_up_wraps_to_the_bottom_of_the_column(self, nav):
+        nav.select(1)
+        nav.go_up()
+        assert nav.get_selected_index() == 5
+
+    def test_go_up_wraps_to_the_last_row_that_has_the_column(self, nav):
+        nav.select(3)
+        nav.go_up()
+        assert nav.get_selected_index() == 3
+
+    def test_navigation_is_safe_without_items(self):
+        nav = ItemNavigation([], columns=4)
+        nav.go_up()
+        nav.go_down()
+        nav.go_left()
+        nav.go_right()
+        assert nav.get_selected_index() is None

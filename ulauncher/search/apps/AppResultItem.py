@@ -33,6 +33,22 @@ class AppResultItem(ResultItem):
     def get_icon(self):
         return self.record.get('icon')
 
+    def get_icon_at_size(self, size):
+        """
+        Returns the app icon rendered at an arbitrary size, or None if it cannot be loaded.
+
+        :param int size: icon size in pixels (already multiplied by the monitor scale factor)
+        :rtype: :class:`Gtk.PixBuf`
+        """
+        # import here to avoid circular deps
+        # pylint: disable=import-outside-toplevel
+        from ulauncher.search.apps.AppIconCache import AppIconCache
+
+        desktop_file = self.record.get('desktop_file')
+        if not desktop_file:
+            return None
+        return AppIconCache.get_instance().get_pixbuf_for_size(desktop_file, size)
+
     def on_enter(self, query):
         self._query_history.save_query(str(query), self.record.get('name'))
 

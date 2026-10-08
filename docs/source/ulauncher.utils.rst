@@ -133,6 +133,14 @@ ulauncher.utils.named\_tuple\_from\_dict module
     :undoc-members:
     :show-inheritance:
 
+ulauncher.utils.recent\_apps module
+-----------------------------------
+
+.. automodule:: ulauncher.utils.recent_apps
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 ulauncher.utils.semver module
 -----------------------------
 

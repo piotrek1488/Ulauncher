@@ -71,6 +71,66 @@
 
       <tr>
         <td>
+          <label for="recent-apps-layout">Frequent apps layout</label>
+        </td>
+        <td>
+          <b-form-select
+            id="recent-apps-layout"
+            style="width:250px"
+            :options="recentAppsLayoutOptions"
+            v-model="recent_apps_layout"
+          ></b-form-select>
+        </td>
+      </tr>
+
+      <tr v-if="recent_apps_layout === 'grid'">
+        <td>
+          <label for="recent-apps-grid-columns">Icons per row</label>
+        </td>
+        <td>
+          <b-form-input
+            type="number"
+            min="1"
+            max="12"
+            style="width:250px"
+            id="recent-apps-grid-columns"
+            v-model="recent_apps_grid_columns"
+          ></b-form-input>
+        </td>
+      </tr>
+
+      <tr v-if="recent_apps_layout === 'grid'">
+        <td>
+          <label for="recent-apps-grid-labels">Grid labels</label>
+        </td>
+        <td>
+          <b-form-select
+            id="recent-apps-grid-labels"
+            style="width:250px"
+            :options="recentAppsGridLabelsOptions"
+            v-model="recent_apps_grid_labels"
+          ></b-form-select>
+        </td>
+      </tr>
+
+      <tr v-if="recent_apps_layout === 'grid'">
+        <td>
+          <label for="recent-apps-grid-icon-size">Grid icon size (px)</label>
+        </td>
+        <td>
+          <b-form-input
+            type="number"
+            min="16"
+            max="128"
+            style="width:250px"
+            id="recent-apps-grid-icon-size"
+            v-model="recent_apps_grid_icon_size"
+          ></b-form-input>
+        </td>
+      </tr>
+
+      <tr>
+        <td>
           <label for="clear_previous_query">Clear Input on Hide</label>
         </td>
         <td>
@@ -200,6 +260,16 @@ export default {
       renderOnScreenOptions: {
         'mouse-pointer-monitor': 'Monitor with a mouse pointer',
         'default-monitor': 'Default monitor'
+      },
+      recentAppsLayoutOptions: {
+        list: 'List (one app per row)',
+        grid: 'Grid of icons'
+      },
+      recentAppsGridLabelsOptions: {
+        none: 'Icons only',
+        name: 'Icon + name',
+        shortcut: 'Icon + shortcut',
+        'name-and-shortcut': 'Icon + name + shortcut'
       }
     }
   },
@@ -241,6 +311,46 @@ export default {
       set(value) {
         this.setPrefs({ show_recent_apps: value })
         jsonp('prefs://set/show-recent-apps', { value: value }).catch(err => bus.$emit('error', err))
+      }
+    },
+
+    recent_apps_layout: {
+      get() {
+        return this.prefs.recent_apps_layout || 'list'
+      },
+      set(value) {
+        this.setPrefs({ recent_apps_layout: value })
+        jsonp('prefs://set/recent-apps-layout', { value: value }).catch(err => bus.$emit('error', err))
+      }
+    },
+
+    recent_apps_grid_columns: {
+      get() {
+        return this.prefs.recent_apps_grid_columns || '4'
+      },
+      set(value) {
+        this.setPrefs({ recent_apps_grid_columns: value })
+        jsonp('prefs://set/recent-apps-grid-columns', { value: value }).catch(err => bus.$emit('error', err))
+      }
+    },
+
+    recent_apps_grid_labels: {
+      get() {
+        return this.prefs.recent_apps_grid_labels || 'name-and-shortcut'
+      },
+      set(value) {
+        this.setPrefs({ recent_apps_grid_labels: value })
+        jsonp('prefs://set/recent-apps-grid-labels', { value: value }).catch(err => bus.$emit('error', err))
+      }
+    },
+
+    recent_apps_grid_icon_size: {
+      get() {
+        return this.prefs.recent_apps_grid_icon_size || '48'
+      },
+      set(value) {
+        this.setPrefs({ recent_apps_grid_icon_size: value })
+        jsonp('prefs://set/recent-apps-grid-icon-size', { value: value }).catch(err => bus.$emit('error', err))
       }
     },
 
