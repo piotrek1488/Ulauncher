@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import logging
 from typing import Any, Literal
 
 from ulauncher import paths
@@ -8,10 +9,24 @@ from ulauncher.data import Err, JsonConf
 from ulauncher.utils.json_utils import json_load_dict, json_save
 from ulauncher.utils.lru_cache import lru_cache
 
+logger = logging.getLogger(__name__)
 _settings_file = f"{paths.CONFIG}/settings.json"
 DisplayBackend = Literal["auto", "system", "x11"]
 RecentAppsLayout = Literal["list", "grid"]
 RecentAppsGridLabels = Literal["none", "name", "shortcut", "name-and-shortcut"]
+
+# settings.json is meant to be hand-editable, so a numeric setting can arrive as a string like
+# "4". Gtk.Adjustment rejects those outright and the layout arithmetic raises on them, so they
+# are normalized on write instead of at every read.
+_INT_SETTINGS = frozenset(
+    {
+        "base_width",
+        "max_recent_apps",
+        "recent_apps_grid_columns",
+        "recent_apps_grid_icon_size",
+        "window_shadow",
+    }
+)
 
 
 # TODO: Remove this some time after v6 stable (give people some month to migrate)
@@ -27,6 +42,16 @@ def _drop_legacy_recent_apps(path: str) -> None:
             data.pop("show_recent_apps", None)
             data.pop("show-recent-apps", None)
             json_save(data, path, sort_keys=True)
+
+
+def _as_int(key: str, value: Any) -> int:
+    """Coerce a numeric setting to int, falling back to the declared default for junk values."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        default = getattr(Settings, key)
+        logger.warning('Invalid value %r for setting "%s", using %s instead', value, key, default)
+        return int(default)
 
 
 class Settings(JsonConf):
@@ -71,6 +96,8 @@ class Settings(JsonConf):
             # If people haven't changed their settings since 2020 it'll be set to 0
             value = int(value) if str(value).isnumeric() else 0
             normalized = "max_recent_apps"
+        if normalized in _INT_SETTINGS and not isinstance(value, int):
+            value = _as_int(normalized, value)
         super().__setitem__(normalized, value)
 
     def get_jump_keys(self) -> list[str]:
