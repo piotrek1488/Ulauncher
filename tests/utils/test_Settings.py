@@ -55,3 +55,30 @@ class TestSettings:
             f.write("{}")
         settings.load_from_file(filename)
         assert settings.get_property('theme-name') == 'light'
+
+    def test_load_from_file__recent_apps_layout_shorthand__is_split_off(self, settings, filename):
+        with open(filename, 'w') as f:
+            f.write('{"show-recent-apps": "8 grid"}')
+        settings.load_from_file(filename)
+        assert settings.get_property('show-recent-apps') == '8'
+        assert settings.get_property('recent-apps-layout') == 'grid'
+
+    def test_load_from_file__explicit_layout_wins_over_the_shorthand(self, settings, filename):
+        with open(filename, 'w') as f:
+            f.write('{"show-recent-apps": "8 grid", "recent-apps-layout": "list"}')
+        settings.load_from_file(filename)
+        assert settings.get_property('show-recent-apps') == '8'
+        assert settings.get_property('recent-apps-layout') == 'list'
+
+    def test_load_from_file__plain_number__leaves_the_layout_alone(self, settings, filename):
+        with open(filename, 'w') as f:
+            f.write('{"show-recent-apps": "8"}')
+        settings.load_from_file(filename)
+        assert settings.get_property('show-recent-apps') == '8'
+        assert settings.get_property('recent-apps-layout') == 'list'
+
+    def test_load_from_file__legacy_boolean__is_normalised(self, settings, filename):
+        with open(filename, 'w') as f:
+            f.write('{"show-recent-apps": true}')
+        settings.load_from_file(filename)
+        assert settings.get_property('show-recent-apps') == '3'

@@ -36,7 +36,8 @@ from ulauncher.utils.mypy_extensions import TypedDict
 from ulauncher.utils.decorator.run_async import run_async
 from ulauncher.utils.wayland import is_wayland
 from ulauncher.utils.Settings import Settings
-from ulauncher.utils.recent_apps import parse_recent_apps_value, format_recent_apps_value
+from ulauncher.utils.recent_apps import (parse_recent_apps_value, clamp_columns, clamp_icon_size,
+                                         LAYOUTS, DEFAULT_LAYOUT, LABEL_MODES, DEFAULT_LABEL_MODE)
 from ulauncher.utils.Router import Router, get_url_params
 from ulauncher.utils.AutostartPreference import AutostartPreference, SwitchError
 from ulauncher.utils.WebKit2 import WebKit2
@@ -323,28 +324,28 @@ class PreferencesUlauncherDialog(Gtk.Dialog, WindowHelper):
 
     @rt.route('/set/show-recent-apps')
     def prefs_set_show_recent_apps(self, url_params):
-        # the field also accepts an optional layout, e.g. "4 grid"
+        # the field also accepts a layout shorthand, e.g. "4 grid". It is not stored
+        # here: it writes through to recent-apps-layout, so both controls stay in sync.
         number, layout = parse_recent_apps_value(url_params['query']['value'])
-        value = format_recent_apps_value(number, layout)
-        logger.info('Set show-recent-apps to %s', value)
-        self.settings.set_property('show-recent-apps', value)
+        logger.info('Set show-recent-apps to %s', number)
+        self.settings.set_property('show-recent-apps', str(number))
+        if layout:
+            logger.info('Set recent-apps-layout to %s (from the show-recent-apps field)', layout)
+            self.settings.set_property('recent-apps-layout', layout)
         self.settings.save_to_file()
 
     @rt.route('/set/recent-apps-layout')
     def prefs_set_recent_apps_layout(self, url_params):
         layout = url_params['query']['value']
-        if layout not in ('list', 'grid'):
-            layout = 'list'
+        if layout not in LAYOUTS:
+            layout = DEFAULT_LAYOUT
         logger.info('Set recent-apps-layout to %s', layout)
         self.settings.set_property('recent-apps-layout', layout)
         self.settings.save_to_file()
 
     @rt.route('/set/recent-apps-grid-columns')
     def prefs_set_recent_apps_grid_columns(self, url_params):
-        try:
-            columns = min(12, max(1, int(url_params['query']['value'])))
-        except ValueError:
-            columns = 4
+        columns = clamp_columns(url_params['query']['value'])
         logger.info('Set recent-apps-grid-columns to %s', columns)
         self.settings.set_property('recent-apps-grid-columns', str(columns))
         self.settings.save_to_file()
@@ -352,18 +353,15 @@ class PreferencesUlauncherDialog(Gtk.Dialog, WindowHelper):
     @rt.route('/set/recent-apps-grid-labels')
     def prefs_set_recent_apps_grid_labels(self, url_params):
         labels = url_params['query']['value']
-        if labels not in ('none', 'name', 'shortcut', 'name-and-shortcut'):
-            labels = 'name-and-shortcut'
+        if labels not in LABEL_MODES:
+            labels = DEFAULT_LABEL_MODE
         logger.info('Set recent-apps-grid-labels to %s', labels)
         self.settings.set_property('recent-apps-grid-labels', labels)
         self.settings.save_to_file()
 
     @rt.route('/set/recent-apps-grid-icon-size')
     def prefs_set_recent_apps_grid_icon_size(self, url_params):
-        try:
-            icon_size = max(16, int(url_params['query']['value']))
-        except ValueError:
-            icon_size = 48
+        icon_size = clamp_icon_size(url_params['query']['value'])
         logger.info('Set recent-apps-grid-icon-size to %s', icon_size)
         self.settings.set_property('recent-apps-grid-icon-size', str(icon_size))
         self.settings.save_to_file()

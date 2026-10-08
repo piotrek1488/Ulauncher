@@ -16,7 +16,7 @@ from gi.repository import Gtk, Gdk, GLib, Keybinder  # type: ignore
 # these imports are needed for Gtk to find widget classes
 from ulauncher.ui.ResultItemWidget import ResultItemWidget  # noqa: F401
 from ulauncher.ui.SmallResultItemWidget import SmallResultItemWidget   # noqa: F401
-from ulauncher.ui.GridItemWidget import GridItemWidget, DEFAULT_ICON_SIZE, DEFAULT_LABEL_MODE  # noqa: F401
+from ulauncher.ui.GridItemWidget import GridItemWidget  # noqa: F401
 
 from ulauncher.config import get_data_file, get_options
 from ulauncher.ui.ItemNavigation import ItemNavigation
@@ -30,7 +30,8 @@ from ulauncher.utils.Settings import Settings
 from ulauncher.utils.decorator.singleton import singleton
 from ulauncher.utils.display import get_current_screen_geometry, get_primary_screen_geometry, get_monitor_scale_factor
 from ulauncher.utils.image_loader import load_image
-from ulauncher.utils.recent_apps import parse_recent_apps_value, LAYOUT_GRID, LAYOUT_LIST
+from ulauncher.utils.recent_apps import (parse_recent_apps_value, clamp_columns, clamp_icon_size,
+                                         LAYOUT_GRID, DEFAULT_LAYOUT, DEFAULT_LABEL_MODE)
 from ulauncher.utils.version_cmp import gtk_version_is_gte
 from ulauncher.utils.desktop.notification import show_notification
 from ulauncher.utils.wayland import is_wayland
@@ -199,7 +200,10 @@ class UlauncherWindow(Gtk.Window, WindowHelper):
             self.activate_preferences()
 
         if self.results_nav:
-            is_grid = self.results_nav.columns > 1
+            # The grid is only ever rendered for an empty query, but it stays on screen
+            # while an extension is still working on a non-empty one. Requiring an empty
+            # input keeps Left/Right as text cursor keys in that window.
+            is_grid = self.results_nav.columns > 1 and not self.input.get_text()
             if is_grid and keyname == 'ISO_Left_Tab':
                 # in a grid Tab/Shift+Tab walk item by item, arrows walk rows/columns
                 self.results_nav.go_left()
@@ -397,12 +401,10 @@ class UlauncherWindow(Gtk.Window, WindowHelper):
         query = self._get_user_query()
         as_grid = False
 
-        recent_apps_number, layout_override = parse_recent_apps_value(
-            self.settings.get_property('show-recent-apps'))
+        recent_apps_number, _ = parse_recent_apps_value(self.settings.get_property('show-recent-apps'))
         if not result_items and not self.input.get_text() and recent_apps_number > 0:
             result_items = AppStatDb.get_instance().get_most_frequent(recent_apps_number)
-            layout = layout_override or self._get_setting_str('recent-apps-layout', LAYOUT_LIST)
-            as_grid = layout == LAYOUT_GRID
+            as_grid = self._get_setting_str('recent-apps-layout', DEFAULT_LAYOUT) == LAYOUT_GRID
 
         if as_grid:
             results, columns = self._create_grid(result_items, query)
@@ -430,12 +432,6 @@ class UlauncherWindow(Gtk.Window, WindowHelper):
         value = self.settings.get_property(name)
         return str(value) if value is not None else default
 
-    def _get_setting_int(self, name, default, minimum=1):
-        try:
-            return max(minimum, int(str(self.settings.get_property(name))))
-        except (TypeError, ValueError):
-            return default
-
     def _create_grid(self, result_items, query):
         """
         Renders result items as a grid of tiles inside result_box.
@@ -443,8 +439,10 @@ class UlauncherWindow(Gtk.Window, WindowHelper):
         :rtype: tuple(list, int)
         :returns: the created widgets (in grid order) and the number of columns
         """
-        columns = self._get_setting_int('recent-apps-grid-columns', 4)
-        icon_size = self._get_setting_int('recent-apps-grid-icon-size', DEFAULT_ICON_SIZE, minimum=16)
+        # clamped on read as well as on write, so a hand-edited settings.json cannot ask
+        # for thousands of columns or oversized icons
+        columns = clamp_columns(self.settings.get_property('recent-apps-grid-columns'))
+        icon_size = clamp_icon_size(self.settings.get_property('recent-apps-grid-icon-size'))
         label_mode = self._get_setting_str('recent-apps-grid-labels', DEFAULT_LABEL_MODE)
 
         def setup(widget):

@@ -90,8 +90,8 @@
         <td>
           <b-form-input
             type="number"
-            min="1"
-            max="12"
+            :min="gridColumnsRange.min"
+            :max="gridColumnsRange.max"
             style="width:250px"
             id="recent-apps-grid-columns"
             v-model="recent_apps_grid_columns"
@@ -120,8 +120,8 @@
         <td>
           <b-form-input
             type="number"
-            min="16"
-            max="128"
+            :min="gridIconSizeRange.min"
+            :max="gridIconSizeRange.max"
             style="width:250px"
             id="recent-apps-grid-icon-size"
             v-model="recent_apps_grid_icon_size"
@@ -238,6 +238,19 @@ import EditableTextList from '@/components/widgets/EditableTextList'
 
 const hotkeyEventName = 'hotkey-show-app'
 
+// Must mirror the limits in ulauncher/ui/GridItemWidget.py, which the preferences API
+// clamps to. Normalizing here keeps the inputs from displaying an unsaved value.
+const GRID_COLUMNS = { min: 1, max: 12, default: 4 }
+const GRID_ICON_SIZE = { min: 16, max: 128, default: 48 }
+
+function clampSetting(value, { min, max, default: fallback }) {
+  const parsed = parseInt(value, 10)
+  if (isNaN(parsed)) {
+    return String(fallback)
+  }
+  return String(Math.min(max, Math.max(min, parsed)))
+}
+
 export default {
   name: 'preferences',
 
@@ -270,7 +283,9 @@ export default {
         name: 'Icon + name',
         shortcut: 'Icon + shortcut',
         'name-and-shortcut': 'Icon + name + shortcut'
-      }
+      },
+      gridColumnsRange: GRID_COLUMNS,
+      gridIconSizeRange: GRID_ICON_SIZE
     }
   },
 
@@ -326,11 +341,13 @@ export default {
 
     recent_apps_grid_columns: {
       get() {
-        return this.prefs.recent_apps_grid_columns || '4'
+        return this.prefs.recent_apps_grid_columns || String(GRID_COLUMNS.default)
       },
       set(value) {
-        this.setPrefs({ recent_apps_grid_columns: value })
-        jsonp('prefs://set/recent-apps-grid-columns', { value: value }).catch(err => bus.$emit('error', err))
+        // clamp here too, so the field never shows something other than what was saved
+        const normalized = clampSetting(value, GRID_COLUMNS)
+        this.setPrefs({ recent_apps_grid_columns: normalized })
+        jsonp('prefs://set/recent-apps-grid-columns', { value: normalized }).catch(err => bus.$emit('error', err))
       }
     },
 
@@ -346,11 +363,12 @@ export default {
 
     recent_apps_grid_icon_size: {
       get() {
-        return this.prefs.recent_apps_grid_icon_size || '48'
+        return this.prefs.recent_apps_grid_icon_size || String(GRID_ICON_SIZE.default)
       },
       set(value) {
-        this.setPrefs({ recent_apps_grid_icon_size: value })
-        jsonp('prefs://set/recent-apps-grid-icon-size', { value: value }).catch(err => bus.$emit('error', err))
+        const normalized = clampSetting(value, GRID_ICON_SIZE)
+        this.setPrefs({ recent_apps_grid_icon_size: normalized })
+        jsonp('prefs://set/recent-apps-grid-icon-size', { value: normalized }).catch(err => bus.$emit('error', err))
       }
     },
 

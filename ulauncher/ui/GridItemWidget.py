@@ -10,17 +10,12 @@ from gi.repository import Gdk
 from ulauncher.ui.ResultItemWidget import ResultItemWidget
 from ulauncher.utils.display import get_monitor_scale_factor
 from ulauncher.search.Query import Query
+# re-exported, so that callers that already deal with the widget don't need both modules
+from ulauncher.utils.recent_apps import (  # noqa: F401
+    LABELS_NONE, LABELS_NAME, LABELS_SHORTCUT, LABELS_NAME_AND_SHORTCUT, LABEL_MODES,
+    DEFAULT_LABEL_MODE, DEFAULT_ICON_SIZE, MIN_ICON_SIZE, MAX_ICON_SIZE, clamp_icon_size)
 
 logger = logging.getLogger(__name__)
-
-LABELS_NONE = 'none'
-LABELS_NAME = 'name'
-LABELS_SHORTCUT = 'shortcut'
-LABELS_NAME_AND_SHORTCUT = 'name-and-shortcut'
-LABEL_MODES = (LABELS_NONE, LABELS_NAME, LABELS_SHORTCUT, LABELS_NAME_AND_SHORTCUT)
-
-DEFAULT_LABEL_MODE = LABELS_NAME_AND_SHORTCUT
-DEFAULT_ICON_SIZE = 48
 
 
 class GridItemWidget(ResultItemWidget):
@@ -43,7 +38,7 @@ class GridItemWidget(ResultItemWidget):
         """
         Must be called before :meth:`initialize`
         """
-        self.icon_size = max(16, int(icon_size))
+        self.icon_size = clamp_icon_size(icon_size)
         self.label_mode = label_mode if label_mode in LABEL_MODES else DEFAULT_LABEL_MODE
 
     def initialize(self, builder: Any, item_object: Any, index: int, query: Query) -> None:

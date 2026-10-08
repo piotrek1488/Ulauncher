@@ -1,4 +1,4 @@
-from ulauncher.utils.recent_apps import parse_recent_apps_value, format_recent_apps_value
+from ulauncher.utils.recent_apps import parse_recent_apps_value
 
 
 class TestParseRecentAppsValue:
@@ -18,6 +18,8 @@ class TestParseRecentAppsValue:
 
     def test_number_with_layout(self):
         assert parse_recent_apps_value('8 grid') == (8, 'grid')
+
+    def test_an_explicit_list_layout_is_kept(self):
         assert parse_recent_apps_value('6 list') == (6, 'list')
 
     def test_is_case_and_whitespace_insensitive(self):
@@ -36,18 +38,3 @@ class TestParseRecentAppsValue:
 
     def test_negative_number_is_clamped(self):
         assert parse_recent_apps_value('-2') == (0, None)
-
-
-class TestFormatRecentAppsValue:
-
-    def test_grid_layout_is_appended(self):
-        assert format_recent_apps_value(8, 'grid') == '8 grid'
-
-    def test_list_layout_is_omitted(self):
-        assert format_recent_apps_value(8, 'list') == '8'
-        assert format_recent_apps_value(8, None) == '8'
-
-    def test_round_trip(self):
-        for value in ('0', '5', '8 grid'):
-            number, layout = parse_recent_apps_value(value)
-            assert format_recent_apps_value(number, layout) == value

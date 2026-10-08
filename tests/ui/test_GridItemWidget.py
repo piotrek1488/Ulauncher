@@ -2,7 +2,9 @@ import pytest
 import mock
 from gi.repository import GdkPixbuf
 from ulauncher.api.shared.item.ResultItem import ResultItem
-from ulauncher.ui.GridItemWidget import GridItemWidget, DEFAULT_ICON_SIZE, DEFAULT_LABEL_MODE
+from ulauncher.ui.GridItemWidget import GridItemWidget
+from ulauncher.utils.recent_apps import (DEFAULT_ICON_SIZE, DEFAULT_LABEL_MODE,
+                                         MIN_ICON_SIZE, MAX_ICON_SIZE)
 
 
 class TestGridItemWidget:
@@ -14,6 +16,14 @@ class TestGridItemWidget:
     @pytest.fixture(autouse=True)
     def Theme(self, mocker):
         return mocker.patch('ulauncher.ui.ResultItemWidget.Theme')
+
+    @pytest.fixture(autouse=True)
+    def scale_factor(self, mocker):
+        """
+        set_icon() multiplies by the monitor scale factor and switches to set_from_surface
+        above 1x, so pin it here instead of depending on the host's DPI.
+        """
+        return mocker.patch('ulauncher.ui.GridItemWidget.get_monitor_scale_factor', return_value=1)
 
     @pytest.fixture
     def builder(self):
@@ -46,10 +56,20 @@ class TestGridItemWidget:
         widget.configure(label_mode='nonsense')
         assert widget.label_mode == DEFAULT_LABEL_MODE
 
-    def test_configure_clamps_tiny_icons(self):
+    def test_configure_clamps_the_icon_size(self):
         widget = GridItemWidget()
         widget.configure(icon_size=4)
-        assert widget.icon_size == 16
+        assert widget.icon_size == MIN_ICON_SIZE
+        widget.configure(icon_size=4096)
+        assert widget.icon_size == MAX_ICON_SIZE
+
+    def test_set_icon_scales_the_request_on_hidpi(self, builder, item_obj, pixbuf, mocker):
+        mocker.patch('ulauncher.ui.GridItemWidget.get_monitor_scale_factor', return_value=2)
+        item_obj.get_icon_at_size = mock.Mock(return_value=pixbuf)
+        widget = GridItemWidget()
+        widget.configure(icon_size=48)
+        widget.initialize(builder, item_obj, 0, 'query')
+        item_obj.get_icon_at_size.assert_called_with(96)
 
     def test_set_icon_asks_the_item_for_the_configured_size(self, builder, item_obj, pixbuf):
         item_obj.get_icon_at_size = mock.Mock(return_value=pixbuf)

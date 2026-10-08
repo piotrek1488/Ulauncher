@@ -7,6 +7,7 @@ gi.require_version('GObject', '2.0')
 from gi.repository import GObject
 
 from ulauncher.utils.decorator.singleton import singleton
+from ulauncher.utils.recent_apps import parse_recent_apps_value
 from ulauncher.config import SETTINGS_FILE_PATH
 
 logger = logging.getLogger(__name__)
@@ -160,6 +161,13 @@ class Settings(GObject.GObject):
                 properties.setdefault("clear-previous-query", not properties.pop("auto-resume"))
             if "max-recent-apps" in properties:
                 properties.setdefault("show-recent-apps", str(properties.pop("max-recent-apps")))
+            # "show-recent-apps" may carry a layout shorthand, e.g. "8 grid". Split it off
+            # here so that "recent-apps-layout" stays the single source of truth.
+            if "show-recent-apps" in properties:
+                number, layout = parse_recent_apps_value(properties["show-recent-apps"])
+                properties["show-recent-apps"] = str(number)
+                if layout:
+                    properties.setdefault("recent-apps-layout", layout)
             self._properties = properties
         else:
             os.makedirs(os.path.dirname(filename), exist_ok=True)
