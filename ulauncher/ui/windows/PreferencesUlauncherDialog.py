@@ -342,7 +342,7 @@ class PreferencesUlauncherDialog(Gtk.Dialog, WindowHelper):
     @rt.route('/set/recent-apps-grid-columns')
     def prefs_set_recent_apps_grid_columns(self, url_params):
         try:
-            columns = max(1, int(url_params['query']['value']))
+            columns = min(12, max(1, int(url_params['query']['value'])))
         except ValueError:
             columns = 4
         logger.info('Set recent-apps-grid-columns to %s', columns)
